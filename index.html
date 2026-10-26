@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Poyoya Dashboard - Builder de Messages</title>
+    <style>
+        :root {
+            --bg-dark: #121216;
+            --panel-bg: #1e1e24;
+            --border-color: #2f2f38;
+            --primary: #6c5ce7;
+            --primary-hover: #5b4bc4;
+            --text-main: #f5f6fa;
+            --text-muted: #a4b0be;
+        }
+
+        body {
+            margin: 0; padding: 0;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* --- NAVIGATION / SÉLECTION TYPE --- */
+        #welcome-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(18, 18, 22, 0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .welcome-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            padding: 30px;
+            border-radius: 12px;
+            width: 400px;
+            text-align: center;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+        }
+        .welcome-card h2 { margin-top: 0; color: var(--primary); }
+        .btn-main {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
+            transition: background 0.2s;
+        }
+        .btn-main:hover { background: var(--primary-hover); }
+        .input-text {
+            width: 100%;
+            padding: 10px;
+            background: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            color: white;
+            border-radius: 6px;
+            box-sizing: border-box;
+            margin-top: 8px;
+            margin-bottom: 15px;
+        }
+
+        /* --- LAYOUT PRINCIPAL DASHBOARD --- */
+        #dashboard {
+            display: flex;
+            width: 100%;
+            height: 100%;
+            display: none;
+        }
+
+        /* Boîte à outils (Gauche) */
+        #toolbox {
+            width: 280px;
+            background: var(--panel-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .tool-item {
+            background: var(--bg-dark);
+            border: 1px dashed var(--border-color);
+            padding: 12px;
+            border-radius: 8px;
+            cursor: grab;
+            text-align: center;
+            font-weight: 600;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .tool-item:hover { border-color: var(--primary); background: rgba(108, 92, 231, 0.1); }
+
+        /* Zone de Prévisualisation (Centre) */
+        #preview-area {
+            flex-grow: 1;
+            padding: 40px;
+            overflow-y: auto;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+        }
+        .discord-mockup {
+            background: #313338;
+            width: 100%;
+            max-width: 650px;
+            border-radius: 8px;
+            padding: 20px;
+            min-height: 400px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            border: 2px dashed transparent;
+            transition: border 0.2s;
+        }
+        .discord-mockup.drag-over { border-color: var(--primary); background: #2b2d31; }
+
+        /* Éléments déposés style Discord */
+        .dropped-content {
+            background: transparent;
+            color: #dbdee1;
+            font-size: 15px;
+            margin-bottom: 15px;
+            padding: 5px;
+            border-radius: 4px;
+            outline: none;
+            border: 1px solid transparent;
+        }
+        .dropped-content:focus { border: 1px solid var(--primary); background: #383a40; }
+
+        .dropped-embed {
+            background: #2b2d31;
+            border-left: 4px solid var(--primary);
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            position: relative;
+        }
+        .embed-title { font-weight: bold; font-size: 16px; color: white; outline: none; }
+        .embed-desc { font-size: 14px; color: #dbdee1; outline: none; }
+        .embed-footer { font-size: 12px; color: #949ba4; outline: none; }
+        
+        .dropped-components {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 1px solid #3f4147;
+        }
+        .discord-btn {
+            background: #5865f2; color: white; border: none; padding: 8px 16px;
+            border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- PAGE 1 : SÉLECTION INITIALE (CRÉER / MODIFIER) -->
+    <div id="welcome-screen">
+        <div class="welcome-card" id="step-choice">
+            <h2>Poyoya Message Builder</h2>
+            <p>Que souhaitez-vous faire ?</p>
+            <button class="btn-main" onclick="selectMode('create')">➕ Créer un nouveau message</button>
+            <button class="btn-main" style="background: #2f3136; margin-top: 10px;" onclick="selectMode('modify')">✏️ Modifier un message existant</button>
+        </div>
+
+        <div class="welcome-card" id="step-create-name" style="display: none;">
+            <h2>Nom de l'enregistrement</h2>
+            <p>Donne un nom unique pour retrouver ton message plus tard :</p>
+            <input type="text" id="save-name" class="input-text" placeholder="ex: reglement_salon">
+            <button class="btn-main" onclick="startBuilder()">Commencer la création</button>
+        </div>
+
+        <div class="welcome-card" id="step-modify-select" style="display: none;">
+            <h2>Modifier un message</h2>
+            <p>Choisis un message enregistré ou colle son lien :</p>
+            <select id="saved-messages-list" class="input-text">
+                <option value="">-- Mes messages enregistrés --</option>
+                <!-- Chargé dynamiquement -->
+            </select>
+            <input type="text" id="message-link" class="input-text" placeholder="Ou coller le lien du message Discord...">
+            <button class="btn-main" onclick="startBuilder()">Charger le message</button>
+        </div>
+    </div>
+
+    <!-- DASHBOARD PRINCIPAL DE CONCEPTION -->
+    <div id="dashboard">
+        <!-- Boîte à outils latérale -->
+        <div id="toolbox">
+            <h3>Boîte à outils</h3>
+            <p style="font-size: 12px; color: var(--text-muted);">Glisse les éléments vers la zone centrale :</p>
+            <div class="tool-item" draggable="true" ondragstart="drag(event)" data-type="content">💬 Contenu texte</div>
+            <div class="tool-item" draggable="true" ondragstart="drag(event)" data-type="embed">📦 Embed</div>
+            <div class="tool-item" draggable="true" ondragstart="drag(event)" data-type="image">🖼️ Image / Fichier</div>
+            <div class="tool-item" draggable="true" ondragstart="drag(event)" data-type="components">🎛️ Composants (Boutons)</div>
+        </div>
+
+        <!-- Zone de prévisualisation / Édition -->
+        <div id="preview-area">
+            <div class="discord-mockup" id="dropzone" ondragover="allowDrop(event)" ondragleave="removeDropStyle(event)" ondrop="drop(event)">
+                <div style="text-align: center; color: #949ba4; margin-top: 100px;" id="empty-placeholder">
+                    Glisse tes éléments de la boîte à outils ici pour construire ton message...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentMode = '';
+
+        function selectMode(mode) {
+            currentMode = mode;
+            document.getElementById('step-choice').style.display = 'none';
+            if (mode === 'create') {
+                document.getElementById('step-create-name').style.display = 'block';
+            } else {
+                document.getElementById('step-modify-select').style.display = 'block';
+                // Simulation de chargement de messages enregistrés depuis le localStorage ou Firebase
+                loadSavedMessages();
+            }
+        }
+
+        function loadSavedMessages() {
+            const select = document.getElementById('saved-messages-list');
+            // Exemple de stockage local pour test
+            const saved = Object.keys(localStorage).filter(k => k.startsWith('poyo_msg_'));
+            saved.forEach(key => {
+                const name = key.replace('poyo_msg_', '');
+                const opt = document.createElement('option');
+                opt.value = key;
+                opt.textContent = name;
+                select.appendChild(opt);
+            });
+        }
+
+        function startBuilder() {
+            const nameInput = document.getElementById('save-name').value;
+            if (currentMode === 'create' && !nameInput) {
+                alert("Veuillez entrer un nom d'enregistrement !");
+                return;
+            }
+            document.getElementById('welcome-screen').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'flex';
+        }
+
+        /* --- LOGIQUE DE GLISSER-DÉPOSER (DRAG & DROP) --- */
+        function allowDrop(ev) {
+            ev.preventDefault();
+            document.getElementById('dropzone').classList.add('drag-over');
+        }
+
+        function removeDropStyle(ev) {
+            document.getElementById('dropzone').classList.remove('drag-over');
+        }
+
+        function drag(ev) {
+            ev.dataTransfer.setData("text/plain", ev.target.dataset.type);
+        }
+
+        function drop(ev) {
+            ev.preventDefault();
+            removeDropStyle(ev);
+            
+            const type = ev.dataTransfer.getData("text/plain");
+            const placeholder = document.getElementById('empty-placeholder');
+            if (placeholder) placeholder.style.display = 'none';
+
+            const dropzone = document.getElementById('dropzone');
+            const element = createElementByType(type);
+            dropzone.appendChild(element);
+        }
+
+        function createElementByType(type) {
+            const wrapper = document.createElement('div');
+
+            if (type === 'content') {
+                wrapper.innerHTML = `<div class="dropped-content" contenteditable="true" placeholder="Écris ton message ici... (tape @ ou #)">Écris ton message ici...</div>`;
+            } 
+            else if (type === 'embed') {
+                wrapper.innerHTML = `
+                    <div class="dropped-embed">
+                        <div class="embed-title" contenteditable="true">Titre de l'Embed</div>
+                        <div class="embed-desc" contenteditable="true">Description de l'embed modifiable en direct...</div>
+                        <div class="embed-footer" contenteditable="true">Footer du message</div>
+                    </div>`;
+            } 
+            else if (type === 'image') {
+                wrapper.innerHTML = `<div style="border: 2px dashed #4f545c; padding: 20px; text-align: center; border-radius: 6px; margin-bottom: 15px; color: #b9bbbe;">🖼️ Dépose ou sélectionne une image ici</div>`;
+            } 
+            else if (type === 'components') {
+                wrapper.innerHTML = `
+                    <div class="dropped-components">
+                        <button class="discord-btn">Mon Bouton</button>
+                    </div>`;
+            }
+            return wrapper;
+        }
+    </script>
+</body>
+</html>
