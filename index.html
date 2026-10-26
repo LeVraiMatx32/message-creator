@@ -120,19 +120,67 @@
             box-shadow: 0 4px 15px rgba(0,0,0,0.3);
             border: 2px dashed transparent;
             transition: border 0.2s;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
         }
         .discord-mockup.drag-over { border-color: var(--primary); background: #2b2d31; }
 
-        /* Éléments déposés style Discord */
+        /* Blocs avec poignée et crayon */
+        .builder-block {
+            position: relative;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            background: rgba(0,0,0,0.15);
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid transparent;
+            transition: border 0.2s;
+        }
+        .builder-block:hover { border-color: #3f4147; }
+
+        /* Poignée 6 points (2 colonnes de 3 points) */
+        .drag-handle {
+            display: grid;
+            grid-template-columns: repeat(2, 4px);
+            gap: 3px;
+            cursor: grab;
+            padding: 6px 2px;
+            align-self: center;
+        }
+        .drag-handle span {
+            width: 4px; height: 4px;
+            background-color: #80848e;
+            border-radius: 50%;
+        }
+
+        /* Bouton Crayon */
+        .edit-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 4px;
+            color: #80848e;
+            align-self: center;
+            transition: color 0.2s;
+        }
+        .edit-btn:hover { color: white; }
+
+        .block-content-wrapper { flex-grow: 1; }
+
+        /* Éléments internes style Discord */
         .dropped-content {
             background: transparent;
             color: #dbdee1;
             font-size: 15px;
-            margin-bottom: 15px;
             padding: 5px;
             border-radius: 4px;
             outline: none;
             border: 1px solid transparent;
+            width: 100%;
+            box-sizing: border-box;
         }
         .dropped-content:focus { border: 1px solid var(--primary); background: #383a40; }
 
@@ -140,12 +188,12 @@
             background: #2b2d31;
             border-left: 4px solid var(--primary);
             border-radius: 4px;
-            padding: 15px;
-            margin-bottom: 15px;
+            padding: 12px;
             display: flex;
             flex-direction: column;
-            gap: 8px;
-            position: relative;
+            gap: 6px;
+            width: 100%;
+            box-sizing: border-box;
         }
         .embed-title { font-weight: bold; font-size: 16px; color: white; outline: none; }
         .embed-desc { font-size: 14px; color: #dbdee1; outline: none; }
@@ -153,11 +201,10 @@
         
         .dropped-components {
             display: flex;
-            gap: 10px;
+            gap: 8px;
             flex-wrap: wrap;
-            margin-top: 15px;
-            padding-top: 10px;
-            border-top: 1px solid #3f4147;
+            padding-top: 5px;
+            width: 100%;
         }
         .discord-btn {
             background: #5865f2; color: white; border: none; padding: 8px 16px;
@@ -188,7 +235,6 @@
             <p>Choisis un message enregistré ou colle son lien :</p>
             <select id="saved-messages-list" class="input-text">
                 <option value="">-- Mes messages enregistrés --</option>
-                <!-- Chargé dynamiquement -->
             </select>
             <input type="text" id="message-link" class="input-text" placeholder="Ou coller le lien du message Discord...">
             <button class="btn-main" onclick="startBuilder()">Charger le message</button>
@@ -211,7 +257,7 @@
         <div id="preview-area">
             <div class="discord-mockup" id="dropzone" ondragover="allowDrop(event)" ondragleave="removeDropStyle(event)" ondrop="drop(event)">
                 <div style="text-align: center; color: #949ba4; margin-top: 100px;" id="empty-placeholder">
-                    Glisse tes éléments de la boîte à outils ici pour construire ton message...
+                    Glisse tes éléments ici (Ordre forcé : Texte ➔ Image ➔ Embed ➔ Composants)
                 </div>
             </div>
         </div>
@@ -227,22 +273,7 @@
                 document.getElementById('step-create-name').style.display = 'block';
             } else {
                 document.getElementById('step-modify-select').style.display = 'block';
-                // Simulation de chargement de messages enregistrés depuis le localStorage ou Firebase
-                loadSavedMessages();
             }
-        }
-
-        function loadSavedMessages() {
-            const select = document.getElementById('saved-messages-list');
-            // Exemple de stockage local pour test
-            const saved = Object.keys(localStorage).filter(k => k.startsWith('poyo_msg_'));
-            saved.forEach(key => {
-                const name = key.replace('poyo_msg_', '');
-                const opt = document.createElement('option');
-                opt.value = key;
-                opt.textContent = name;
-                select.appendChild(opt);
-            });
         }
 
         function startBuilder() {
@@ -255,7 +286,9 @@
             document.getElementById('dashboard').style.display = 'flex';
         }
 
-        /* --- LOGIQUE DE GLISSER-DÉPOSER (DRAG & DROP) --- */
+        /* --- LOGIQUE DE GLISSER-DÉPOSER ET ORDRE STRICT --- */
+        const orderPriority = { 'content': 1, 'image': 2, 'embed': 3, 'components': 4 };
+
         function allowDrop(ev) {
             ev.preventDefault();
             document.getElementById('dropzone').classList.add('drag-over');
@@ -278,18 +311,58 @@
             if (placeholder) placeholder.style.display = 'none';
 
             const dropzone = document.getElementById('dropzone');
-            const element = createElementByType(type);
-            dropzone.appendChild(element);
+            
+            // Vérifier si un bloc de ce type existe déjà pour respecter l'unicité par section si besoin
+            let existingBlock = dropzone.querySelector(`[data-block-type="${type}"]`);
+            if (existingBlock) {
+                return; // Un seul élément de chaque type pour respecter l'ordre strict
+            }
+
+            const block = createBlockElement(type);
+            
+            // Insérer au bon endroit selon l'ordre strict : Contenu -> Image -> Embed -> Composants
+            let inserted = false;
+            const blocks = dropzone.querySelectorAll('.builder-block');
+            for (let b of blocks) {
+                if (orderPriority[type] < orderPriority[b.dataset.blockType]) {
+                    dropzone.insertBefore(block, b);
+                    inserted = true;
+                    break;
+                }
+            }
+            if (!inserted) {
+                dropzone.appendChild(block);
+            }
         }
 
-        function createElementByType(type) {
-            const wrapper = document.createElement('div');
+        function createBlockElement(type) {
+            const builderBlock = document.createElement('div');
+            builderBlock.className = 'builder-block';
+            builderBlock.dataset.blockType = type;
+
+            // Poignée 6 points (2 colonnes de 3 points)
+            const handle = document.createElement('div');
+            handle.className = 'drag-handle';
+            for (let i = 0; i < 6; i++) {
+                handle.appendChild(document.createElement('span'));
+            }
+
+            // Bouton Crayon pour modifier les paramètres
+            const editBtn = document.createElement('button');
+            editBtn.className = 'edit-btn';
+            editBtn.innerHTML = '✏️';
+            editBtn.title = 'Modifier les paramètres';
+            editBtn.onclick = () => openBlockSettings(type);
+
+            // Contenu visuel du bloc
+            const contentWrapper = document.createElement('div');
+            contentWrapper.className = 'block-content-wrapper';
 
             if (type === 'content') {
-                wrapper.innerHTML = `<div class="dropped-content" contenteditable="true" placeholder="Écris ton message ici... (tape @ ou #)">Écris ton message ici...</div>`;
+                contentWrapper.innerHTML = `<div class="dropped-content" contenteditable="true" placeholder="Écris ton message ici...">Écris ton message ici...</div>`;
             } 
             else if (type === 'embed') {
-                wrapper.innerHTML = `
+                contentWrapper.innerHTML = `
                     <div class="dropped-embed">
                         <div class="embed-title" contenteditable="true">Titre de l'Embed</div>
                         <div class="embed-desc" contenteditable="true">Description de l'embed modifiable en direct...</div>
@@ -297,15 +370,24 @@
                     </div>`;
             } 
             else if (type === 'image') {
-                wrapper.innerHTML = `<div style="border: 2px dashed #4f545c; padding: 20px; text-align: center; border-radius: 6px; margin-bottom: 15px; color: #b9bbbe;">🖼️ Dépose ou sélectionne une image ici</div>`;
+                contentWrapper.innerHTML = `<div style="border: 2px dashed #4f545c; padding: 15px; text-align: center; border-radius: 6px; color: #b9bbbe; font-size: 14px;">🖼️ Glisse ou sélectionne une image / fichier</div>`;
             } 
             else if (type === 'components') {
-                wrapper.innerHTML = `
+                contentWrapper.innerHTML = `
                     <div class="dropped-components">
                         <button class="discord-btn">Mon Bouton</button>
                     </div>`;
             }
-            return wrapper;
+
+            builderBlock.appendChild(handle);
+            builderBlock.appendChild(editBtn);
+            builderBlock.appendChild(contentWrapper);
+
+            return builderBlock;
+        }
+
+        function openBlockSettings(type) {
+            alert("Ouverture des paramètres avancés pour le bloc : " + type);
         }
     </script>
 </body>
